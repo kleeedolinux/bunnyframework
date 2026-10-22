@@ -14,7 +14,7 @@ module Bunny
     property assigns : Hash(String, Object) = Hash(String, Object).new
     property path_params : Hash(String, String) = Hash(String, String).new
     # Set by a plug that takes over the socket (e.g. WebSocket upgrade).
-    property upgrade : String = ""
+    property upgrader : Upgrader? = nil
     property resp_cookies : List(String) = List(String).new
     @cookie_cache : Hash(String, String)? = nil
     @query_cache : Hash(String, String)? = nil

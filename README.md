@@ -12,7 +12,7 @@ The core is called **Bunny Hole**: the request goes in at the top and falls thro
 a controller until a response comes out the bottom.
 
 ```text
-socket ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ Router ─▶ pipeline ─▶ Controller ─▶ View/Template ─▶ response
+Kestrel ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ Router ─▶ pipeline ─▶ Controller ─▶ View/Template ─▶ response
                                      │
                                      └─ upgrade ─▶ BunnyLive (Channels · PubSub · Presence · LiveView)
 ```
@@ -23,7 +23,7 @@ socket ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ Ro
 |---|---|
 | Rails-level productivity | `bunny new`, `bunny gen.*` generators, conventions over configuration |
 | Phoenix-level realtime | Channels, PubSub, Presence and LiveView in the box, one WebSocket per client |
-| High performance | Alice compiles to .NET IL (or NativeAOT); own HTTP/1.1 server on raw sockets, keep-alive, pre-compiled route tables, templates parsed once and cached, LiveView sends only the dynamic parts that changed |
+| High performance | Alice compiles to .NET IL (or NativeAOT); Kestrel transport, pre-compiled route tables, templates parsed once and cached, LiveView sends only the dynamic parts that changed |
 | Explicit data flow | Everything is a `Conn -> Conn` transformation; no hidden globals |
 | Modular | Six packages with one-way dependencies, checked by an architecture test |
 | Low maintenance | Standard library and .NET BCL first; no extra runtime dependencies |
@@ -35,7 +35,7 @@ socket ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ Ro
 | `packages/shared` | `BunnyKit` | Wire primitives: HTTP reasons, MIME types, HTML escape, URL/query, JSON |
 | `packages/core` | `Bunny` | **Bunny Hole**: `Conn`, plugs, pipelines, router, controllers, EAL templates, endpoint, data (repo/changesets) |
 | `packages/realtime` | `BunnyLive` | WebSocket protocol, PubSub, Channels, Presence, LiveView |
-| `packages/proxy` | `BunnyServer` | The HTTP/1.1 server: sockets, parsing, keep-alive, static files, WebSocket upgrade |
+| `packages/proxy` | `BunnyServer` | Transport: Kestrel (NuGet) for HTTP/1.1 and WebSockets, adapted to `Bunny::Conn` |
 | `packages/api` | `BunnyApi` | JSON API helpers: JSON rendering, error shapes, pagination |
 | `packages/controller` | `BunnyCli` | The `bunny` command line |
 

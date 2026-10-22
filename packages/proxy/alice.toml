@@ -6,3 +6,6 @@ kind = "lib"
 [dependencies]
 core = { path = "../core" }
 shared = { path = "../shared" }
+"Microsoft.AspNetCore.Server.Kestrel" = "2.3.0"
+"Microsoft.AspNetCore.Hosting" = "2.3.0"
+"Microsoft.AspNetCore.WebSockets" = "2.3.0"
