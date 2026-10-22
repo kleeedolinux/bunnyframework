@@ -48,4 +48,5 @@ AL0212 `safe` reaches ambient authority, AL0213 borrow escapes, AL0214 rule doma
 ## Bunny
 
 - Architecture: `archicture/README.md`. Test each package: `cd packages/<p> && alice test`.
+- Before committing: `scripts/test.sh` (tests, arch, `bunny prove --check`, fmt). After changing a kernel or RULES.al, run `bunny prove` and commit the regenerated PROOF.al.
 - Multi-line arrays in `alice.toml` crash the Alice TOML parser: keep them on one line.

@@ -21,6 +21,7 @@ module BunnyCli
         when "gen.channel" then gen(cwd, rest, force, "channel")
         when "gen.resource" then gen(cwd, rest, force, "resource")
         when "arch" then cmd_arch(cwd)
+        when "prove" then Prove.run(cwd, rest.Contains("--check"))
         when "version", "-v", "--version" then say(VERSION_TEXT)
         when "help", "-h", "--help" then help
         else

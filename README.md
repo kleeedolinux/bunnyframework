@@ -74,6 +74,7 @@ bunny gen.channel Room         # channel
 bunny gen.resource Post title:string body:text views:integer   # CRUD controller + templates + route lines
 bunny test                     # compile templates + alice test
 bunny arch                     # check the framework's dependency rules
+bunny prove [--check]          # prove RULES.al (framework packages or this app)
 ```
 
 A new app:
@@ -202,6 +203,24 @@ The first request renders full HTML inside the layout. `/bunny.js` (no build ste
 validates params before anything is written (`validate_required`, `validate_length`, `validate_format`,
 `validate_number`). `BunnyApi::Render.changeset_errors` turns failures into `422 {"errors":{...}}`.
 
+## Rules and proofs
+
+The kernels that decide correctness are `pure` Alice, and `RULES.al` in each package proves them by
+exhaustion (`alice prove`). `PROOF.al` records each result and the source hashes. `bunny prove --check`
+fails when a rule breaks or the sources changed since the last proof.
+
+| Package | Rule | Cases |
+|---|---|---|
+| shared | every UTF-16 char: HTML entity is safe; `needs_escape?` is exact; JSON escape round-trips; hex digits | 65,536 each |
+| shared | every status 100..599 has a reason | 500 |
+| core | **EAL templates**: for every 8-token template, the compiler accepts exactly the well-formed ones, and dynamic slots open/close strictly alternating (statics = slots + 1) | 5,764,801 |
+| realtime | fork/join fan-out reaches every subscriber exactly once (0..100k) and every split progresses | 1.1M |
+| realtime | applying a LiveView diff to the last render rebuilds the new render; no diff when unchanged | 164k |
+| api | pagination never leaves bounds and its pages partition the list | 3.4M |
+
+Each `RULES.al` names its dependency-free sources on a header line, e.g.
+`# prove-with: src/eal/compiler.al`. In an app, `bunny prove` proves the app's own `RULES.al`.
+
 ## Performance
 
 Measured with `wrk -t4 -c64 -d5s` on the generated app (debug build, logger on, one machine):
@@ -214,7 +233,7 @@ Measured with `wrk -t4 -c64 -d5s` on the generated app (debug build, logger on, 
 ## Develop
 
 ```bash
-scripts/test.sh     # every package suite, architecture check, example app tests
+scripts/test.sh     # every package suite, architecture check, proofs, fmt, example app tests
 ```
 
 Alice notes that shape the code (see `archicture/README.md`): one root module per package; classes

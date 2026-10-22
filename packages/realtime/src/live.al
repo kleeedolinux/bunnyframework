@@ -126,22 +126,13 @@ module BunnyLive
     def diff : Hash(String, Object)
       tpl = Bunny::Views.fetch(@view.not_nil!.template)
       now = tpl.dynamics(@state.assigns).ToArray
-      changed = LiveChannel.changed_slots(@last.ToArray, now)
+      changed = Kernels.changed_slots(@last.ToArray, now)
       d = Hash(String, Object).new
       for i in 0...now.size
         d[i.to_s] = now[i] if changed[i]
       end
       @last = List(String).new(now)
       d
-    end
-
-    # Pure, index-independent loop: the compiler parallelizes it for large templates.
-    pure def self.changed_slots(borrow last : Array(String), borrow now : Array(String)) : Array(Bool)
-      out = Array(Bool).new(now.size)
-      for i in 0...now.size
-        out[i] = i >= last.size || last[i] != now[i]
-      end
-      out
     end
 
     def subscribe(topic : String) : Nil

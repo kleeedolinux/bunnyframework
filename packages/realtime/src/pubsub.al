@@ -101,9 +101,6 @@ module BunnyLive
       end
     end
 
-    # Below this many subscribers a branch delivers serially; above, it forks.
-    FANOUT_LEAF = 64
-
     # Returns how many subscribers received the message.
     def broadcast(topic : String, event : String, payload : Object) : Int32
       subs = snapshot(topic)
@@ -117,7 +114,7 @@ module BunnyLive
 
     # Fork/join: split the subscriber range, deliver both halves in parallel, join.
     def self.fan_out(subs : List(Subscriber), lo : Int32, hi : Int32, env : Envelope, skip : Subscriber?) : Int32
-      if hi - lo <= FANOUT_LEAF
+      if hi - lo <= Kernels.fan_leaf
         n = 0
         for i in lo...hi
           s = subs[i]
@@ -127,7 +124,7 @@ module BunnyLive
         end
         return n
       end
-      mid = lo + (hi - lo) / 2
+      mid = Kernels.fan_mid(lo, hi)
       left = spawn { PubSub.fan_out(subs, lo, mid, env, skip) }
       right = PubSub.fan_out(subs, mid, hi, env, skip)
       left.Result + right

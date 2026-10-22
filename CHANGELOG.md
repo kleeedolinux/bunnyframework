@@ -11,4 +11,5 @@
 - BunnyLive: PubSub with fork/join fan-out and encode-once envelopes, Phoenix V2 channels, Presence, LiveView (layout-aware, static/dynamic diffs, pure parallel slot diff), `/bunny.js` client.
 - BunnyApi: JSON error and changeset error shapes, pagination, CORS, bearer auth.
 - `bunny` CLI: new, server, compile, routes, test, gen.controller/live/channel/resource, arch, version.
+- RULES.al/PROOF.al in shared, core, realtime, api: 14 rules proven by exhaustion (escaping, JSON, EAL split, fan-out, LiveView diffs, pagination); `bunny prove [--check]`.
 - `examples/hello` generated app; `scripts/install.sh`, `scripts/test.sh`.

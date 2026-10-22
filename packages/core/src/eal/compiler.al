@@ -15,6 +15,116 @@ module Bunny
   module Eal
     EXT = ".html.eal"
 
+    # Token kinds (input of `plan`).
+    pure def self.k_text : Int32
+      0
+    end
+    pure def self.k_out : Int32
+      1
+    end
+    pure def self.k_open : Int32
+      2
+    end
+    pure def self.k_close : Int32
+      3
+    end
+    pure def self.k_mid : Int32
+      4
+    end
+    pure def self.k_code : Int32
+      5
+    end
+    pure def self.k_skip : Int32
+      6
+    end
+
+    # Actions (output of `plan`). Slot actions open/close a LiveView dynamic slot.
+    pure def self.a_static : Int32
+      0
+    end
+    pure def self.a_text : Int32
+      1
+    end
+    pure def self.a_slot_out : Int32
+      2
+    end
+    pure def self.a_out : Int32
+      3
+    end
+    pure def self.a_slot_open : Int32
+      4
+    end
+    pure def self.a_code : Int32
+      5
+    end
+    pure def self.a_slot_close : Int32
+      6
+    end
+    pure def self.a_skip : Int32
+      7
+    end
+
+    # Verdicts in the last cell of `plan`.
+    pure def self.ok : Int32
+      0
+    end
+    pure def self.err_unexpected : Int32
+      -1
+    end
+    pure def self.err_missing_end : Int32
+      -2
+    end
+
+    # The static/dynamic split as a pure function of token kinds (proven in RULES.al).
+    # Returns one action per token plus a final verdict cell.
+    pure def self.plan(kinds : Array(Int32)) : Array(Int32)
+      n = kinds.size
+      out = Array(Int32).new(n + 1)
+      depth = 0
+      for i in 0...n
+        k = kinds[i]
+        if k == k_text
+          out[i] = depth == 0 ? a_static : a_text
+        elsif k == k_out
+          out[i] = depth == 0 ? a_slot_out : a_out
+        elsif k == k_open
+          out[i] = depth == 0 ? a_slot_open : a_code
+          depth += 1
+        elsif k == k_close
+          if depth == 0
+            out[n] = err_unexpected
+            return out
+          end
+          depth -= 1
+          out[i] = depth == 0 ? a_slot_close : a_code
+        elsif k == k_mid
+          if depth == 0
+            out[n] = err_unexpected
+            return out
+          end
+          out[i] = a_code
+        elsif k == k_code
+          out[i] = a_code
+        else
+          out[i] = a_skip
+        end
+      end
+      out[n] = depth == 0 ? ok : err_missing_end
+      out
+    end
+
+    def self.kind_of(t : EalToken) : Int32
+      k = t.kind
+      return k_text if k == "text"
+      return k_out if k == "esc" || k == "raw"
+      return k_skip if k == "decl"
+      code = t.body
+      return k_close if closes_block?(code)
+      return k_open if opens_block?(code)
+      return k_mid if code.StartsWith("else") || code.StartsWith("elsif") || code.StartsWith("when") || code.StartsWith("rescue") || code.StartsWith("ensure")
+      k_code
+    end
+
     def self.class_name(name : String) : String
       sb = System.Text.StringBuilder.new
       upper = true
@@ -166,58 +276,70 @@ module Bunny
     end
 
     def run : Nil
-      for t in Eal.tokenize(@src)
-        k = t.kind
-        if k == "text"
-          if @depth == 0
-            @pending.Append(t.body)
-          else
-            line("out.text(#{Eal.literal(t.body)})")
-          end
-        elsif k == "decl"
-          for d in Eal.split_decls(t.body)
-            colon = d.IndexOf(":")
-            raise System.FormatException.new("assign needs a type: #{d}") if colon < 0
-            var = d.Substring(0, colon).Trim
-            ty = d.Substring(colon + 1).Trim
-            @decls << "    #{var} = Bunny::View.fetch(a, #{Eal.literal(var)}, #{Eal.literal(@name)}).as(#{ty})"
-          end
-        elsif k == "esc" || k == "raw"
-          if @depth == 0
-            flush_static
-            line("out.open_dyn")
-            line("out.#{k}(#{t.body})")
-            line("out.close_dyn")
-          else
-            line("out.#{k}(#{t.body})")
-          end
-        else
-          code = t.body
-          if Eal.closes_block?(code)
-            raise System.FormatException.new("unexpected end in #{@name}") if @depth == 0
-            @depth -= 1
-            line(code)
-            line("out.close_dyn") if @depth == 0
-          elsif Eal.opens_block?(code)
-            if @depth == 0
-              flush_static
-              line("out.open_dyn")
-            end
-            line(code)
+      tokens = Eal.tokenize(@src)
+      kinds = Array(Int32).new(tokens.size)
+      for i in 0...tokens.size
+        kinds[i] = Eal.kind_of(tokens[i])
+      end
+      actions = Eal.plan(kinds)
+      verdict = actions[tokens.size]
+      raise System.FormatException.new("unexpected end/else in #{@name}") if verdict == Eal.err_unexpected
+      raise System.FormatException.new("missing end in #{@name}") if verdict == Eal.err_missing_end
+      for i in 0...tokens.size
+        t = tokens[i]
+        a = actions[i]
+        if a == Eal.a_static
+          @pending.Append(t.body)
+        elsif a == Eal.a_text
+          line("out.text(#{Eal.literal(t.body)})")
+        elsif a == Eal.a_slot_out
+          flush_static
+          line("out.open_dyn")
+          line("out.#{t.kind}(#{t.body})")
+          line("out.close_dyn")
+        elsif a == Eal.a_out
+          line("out.#{t.kind}(#{t.body})")
+        elsif a == Eal.a_slot_open
+          flush_static
+          line("out.open_dyn")
+          line(t.body)
+          @depth += 1
+        elsif a == Eal.a_slot_close
+          @depth -= 1
+          line(t.body)
+          line("out.close_dyn")
+        elsif a == Eal.a_code
+          k = kinds[i]
+          if k == Eal.k_open
+            line(t.body)
             @depth += 1
-          elsif code.StartsWith("else") || code.StartsWith("elsif") || code.StartsWith("when") || code.StartsWith("rescue") || code.StartsWith("ensure")
+          elsif k == Eal.k_close
             @depth -= 1
-            line(code)
+            line(t.body)
+          elsif k == Eal.k_mid
+            @depth -= 1
+            line(t.body)
             @depth += 1
           else
-            line(code)
+            line(t.body)
           end
+        elsif t.kind == "decl"
+          declare(t.body)
         end
       end
-      raise System.FormatException.new("missing end in #{@name}") if @depth != 0
       line("out.static(#{@statics.size})")
       @statics << @pending.ToString
       @pending.Clear
+    end
+
+    def declare(body : String) : Nil
+      for d in Eal.split_decls(body)
+        colon = d.IndexOf(":")
+        raise System.FormatException.new("assign needs a type: #{d}") if colon < 0
+        var = d.Substring(0, colon).Trim
+        ty = d.Substring(colon + 1).Trim
+        @decls << "    #{var} = Bunny::View.fetch(a, #{Eal.literal(var)}, #{Eal.literal(@name)}).as(#{ty})"
+      end
     end
 
     def source : String

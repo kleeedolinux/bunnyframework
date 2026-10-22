@@ -16,6 +16,7 @@ Usage: bunny <command> [args]
   gen.channel <Name>              channel
   gen.resource <Name> field:type  CRUD controller + templates (types: string, text, integer)
   arch                            check workspace dependency rules (framework repo)
+  prove [--check]                 prove RULES.al (every package in the framework root, or this app)
   version                         print the version
   help                            this text
 

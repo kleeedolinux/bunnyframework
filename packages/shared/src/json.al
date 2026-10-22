@@ -53,25 +53,58 @@ module BunnyKit
       end
     end
 
+    # Chars that are written as-is inside a JSON string.
+    pure def self.plain?(ch : Char) : Bool
+      ch >= ' ' && ch != '"' && ch != '\\'
+    end
+
+    pure def self.hex_digit(n : Int32) : Char
+      return ('0' + n).as(Char) if n < 10
+      ('a' + (n - 10)).as(Char)
+    end
+
+    # Escape sequence for a non-plain char (the pure kernel proven in RULES.al).
+    pure def self.escape_char(ch : Char) : String
+      return "\\\"" if ch == '"'
+      return "\\\\" if ch == '\\'
+      return "\\n" if ch == '\n'
+      return "\\r" if ch == '\r'
+      return "\\t" if ch == '\t'
+      return "\\b" if ch == '\b'
+      return "\\f" if ch == '\f'
+      code = ch - '\0'
+      "\\u" + hex_digit((code / 4096) % 16) + hex_digit((code / 256) % 16) + hex_digit((code / 16) % 16) + hex_digit(code % 16)
+    end
+
+    # Char for a two-char escape "\\x"; '\0' when x is not a short escape.
+    pure def self.unescape(x : Char) : Char
+      return '"' if x == '"'
+      return '\\' if x == '\\'
+      return '/' if x == '/'
+      return '\n' if x == 'n'
+      return '\r' if x == 'r'
+      return '\t' if x == 't'
+      return '\b' if x == 'b'
+      return '\f' if x == 'f'
+      '\0'
+    end
+
+    # Value of a hex digit, or -1.
+    pure def self.hex_value(ch : Char) : Int32
+      return ch - '0' if ch >= '0' && ch <= '9'
+      return ch - 'a' + 10 if ch >= 'a' && ch <= 'f'
+      return ch - 'A' + 10 if ch >= 'A' && ch <= 'F'
+      -1
+    end
+
     def self.write_string(sb : System.Text.StringBuilder, s : String)
       sb.Append('"')
       for i in 0...s.size
         ch = s[i]
-        if ch == '"'
-          sb.Append("\\\"")
-        elsif ch == '\\'
-          sb.Append("\\\\")
-        elsif ch == '\n'
-          sb.Append("\\n")
-        elsif ch == '\r'
-          sb.Append("\\r")
-        elsif ch == '\t'
-          sb.Append("\\t")
-        elsif ch.to_i < 32
-          sb.Append("\\u")
-          sb.Append(ch.to_i.ToString("x4"))
-        else
+        if plain?(ch)
           sb.Append(ch)
+        else
+          sb.Append(escape_char(ch))
         end
       end
       sb.Append('"')
@@ -200,40 +233,26 @@ module BunnyKit
         elsif ch == '\\'
           e = peek
           @pos += 1
-          if e == 'n'
-            sb.Append('\n')
-          elsif e == 't'
-            sb.Append('\t')
-          elsif e == 'r'
-            sb.Append('\r')
-          elsif e == 'b'
-            sb.Append('\b')
-          elsif e == 'f'
-            sb.Append('\f')
-          elsif e == 'u'
+          if e == 'u'
             fail("bad unicode escape") if @pos + 4 > @s.size
             code = 0
             for k in 0...4
-              code = code * 16 + hex(@s[@pos + k])
+              d = Json.hex_value(@s[@pos + k])
+              fail("bad hex digit") if d < 0
+              code = code * 16 + d
             end
             @pos += 4
             sb.Append(code.chr)
           else
-            sb.Append(e)
+            u = Json.unescape(e)
+            fail("bad escape") if u == '\0'
+            sb.Append(u)
           end
         else
           sb.Append(ch)
         end
       end
       ""
-    end
-
-    def hex(ch : Char) : Int32
-      return ch.to_i - 48 if ch >= '0' && ch <= '9'
-      return ch.to_i - 87 if ch >= 'a' && ch <= 'f'
-      return ch.to_i - 55 if ch >= 'A' && ch <= 'F'
-      fail("bad hex digit")
-      0
     end
 
     def read_number : Object

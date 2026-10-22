@@ -41,7 +41,7 @@ end
 def test_changed_slots
   last = ["a", "b", "c"]
   now = ["a", "x", "c", "d"]
-  ch = BunnyLive::LiveChannel.changed_slots(last, now)
+  ch = BunnyLive::Kernels.changed_slots(last, now)
   assert_equal 4, ch.size
   assert !ch[0], "same"
   assert ch[1], "changed"

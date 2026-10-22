@@ -1,7 +1,6 @@
-# Offset pagination from ?page=&per_page= (per_page capped at 100).
+# Offset pagination from ?page=&per_page= (per_page capped at 100). Arithmetic in Kernels, proven in RULES.al.
 module BunnyApi
   class Page
-    MAX_PER_PAGE = 100
     getter entries : List(Object)
     getter page : Int32
     getter per_page : Int32
@@ -11,8 +10,7 @@ module BunnyApi
     end
 
     def total_pages : Int32
-      return 1 if @total == 0
-      (@total + @per_page - 1) / @per_page
+      Kernels.total_pages(@total, @per_page)
     end
 
     def self.int_param(c : Bunny::Conn, name : String, dflt : Int32) : Int32
@@ -22,11 +20,11 @@ module BunnyApi
     end
 
     def self.from(c : Bunny::Conn, all : List(Object)) : Page
-      page = Math.max(1, int_param(c, "page", 1))
-      per = Math.min(MAX_PER_PAGE, Math.max(1, int_param(c, "per_page", 20)))
-      start = Math.min(all.size, (page - 1) * per)
-      count = Math.min(per, all.size - start)
-      Page.new(all.GetRange(start, count), page, per, all.size)
+      req_page = int_param(c, "page", 1)
+      req_per = int_param(c, "per_page", 20)
+      start = Kernels.window_start(all.size, req_page, req_per)
+      count = Kernels.window_count(all.size, req_page, req_per)
+      Page.new(all.GetRange(start, count), Kernels.page(req_page), Kernels.per_page(req_per), all.size)
     end
 
     def to_h : Hash(String, Object)
