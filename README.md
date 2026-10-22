@@ -33,7 +33,7 @@ socket ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ Ro
 | Package | Module | Role |
 |---|---|---|
 | `packages/shared` | `BunnyKit` | Wire primitives: HTTP reasons, MIME types, HTML escape, URL/query, JSON |
-| `packages/core` | `Bunny` | **Bunny Hole**: `Conn`, plugs, pipelines, router, controllers, templates, endpoint, data (repo/changesets) |
+| `packages/core` | `Bunny` | **Bunny Hole**: `Conn`, plugs, pipelines, router, controllers, EAL templates, endpoint, data (repo/changesets) |
 | `packages/realtime` | `BunnyLive` | WebSocket protocol, PubSub, Channels, Presence, LiveView |
 | `packages/proxy` | `BunnyServer` | The HTTP/1.1 server: sockets, parsing, keep-alive, static files, WebSocket upgrade |
 | `packages/api` | `BunnyApi` | JSON API helpers: JSON rendering, error shapes, pagination |
@@ -97,17 +97,23 @@ end
 `Conn` is the one value that carries request, params, assigns and the response. Helpers: `text`, `html`,
 `json`, `redirect`, `put_status`, `put_resp_header`, `halt`.
 
-### Templates (`.bunny.html`)
+### Templates (EAL: Embedded Alice, `.html.eal`)
 
-```html
-<h1>{{ title }}</h1>
-{{#each posts}}<li>{{ title }}</li>{{/each}}
-{{#if admin}}<a href="/admin">admin</a>{{/if}}
-{{{ raw_html }}}
+Templates are separate files, `templates/posts/show.html.eal`:
+
+```erb
+<%@ title : String, posts : List(Post) %>
+<h1><%= title %></h1>
+<% for p in posts %>
+  <li><%= p.title %></li>
+<% end %>
+<%== raw_html %>
 ```
 
-`{{ x }}` is HTML-escaped and `{{{ x }}}` is raw. Templates are parsed once into statics and dynamics and then
-cached. LiveView uses the same split, so an update sends only the dynamics that changed.
+`<%= %>` is HTML-escaped and `<%== %>` is raw. `<% %>` is any Alice code. `<%@ %>` declares typed assigns.
+`bunny compile` turns every template into a real Alice class (`PostsShowView < Bunny::View`), so
+templates are type-checked and optimized by the Alice compiler, with no interpreter at runtime. Each one
+is split into statics and dynamics, and LiveView sends only the dynamics that changed.
 
 ### Channels and PubSub
 
@@ -135,10 +141,13 @@ class CounterLive < BunnyLive::LiveView
   def handle_event(event : String, params : Hash(String, Object), s : BunnyLive::LiveSocket)
     s.assign("count", s.get_i("count") + 1) if event == "inc"
   end
-  def template : String
-    "<p>{{ count }}</p><button bunny-click=\"inc\">+</button>"
-  end
 end
+```
+
+```erb
+<%# templates/live/counter.html.eal %>
+<%@ count : Int32 %>
+<p><%= count %></p><button bunny-click="inc">+</button>
 ```
 
 The first request renders full HTML. The browser then joins over WebSocket (`/bunny.js`, with no build

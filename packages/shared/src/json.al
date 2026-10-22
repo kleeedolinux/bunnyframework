@@ -77,40 +77,186 @@ module BunnyKit
       sb.Append('"')
     end
 
-    def self.decode(text : String) : Object?
-      doc = System.Text.Json.JsonDocument.Parse(text)
-      convert(doc.RootElement)
+    # Pure-Alice recursive-descent decoder. null decodes to Json::NULL.
+    def self.decode(text : String) : Object
+      r = JsonReader.new(text)
+      v = r.read_value
+      r.skip_ws
+      r.fail("trailing characters") if r.pos < text.size
+      v
+    end
+  end
+
+  class JsonReader
+    getter pos : Int32 = 0
+
+    def initialize(@s : String)
     end
 
-    def self.convert(e : System.Text.Json.JsonElement) : Object?
-      kind = e.ValueKind
-      if kind == System.Text.Json.JsonValueKind.Object
-        h = Hash(String, Object).new
-        for p in e.EnumerateObject
-          h[p.Name] = convert(p.Value) || NULL
-        end
-        h
-      elsif kind == System.Text.Json.JsonValueKind.Array
-        l = List(Object).new
-        for item in e.EnumerateArray
-          l << (convert(item) || NULL)
-        end
-        l
-      elsif kind == System.Text.Json.JsonValueKind.String
-        e.GetString
-      elsif kind == System.Text.Json.JsonValueKind.Number
-        n = 0_i64
-        if e.TryGetInt64(out n)
-          n
-        else
-          e.GetDouble
-        end
-      elsif kind == System.Text.Json.JsonValueKind.True
+    def fail(msg : String)
+      raise System.FormatException.new("invalid JSON at #{@pos}: #{msg}")
+    end
+
+    def skip_ws
+      while @pos < @s.size
+        ch = @s[@pos]
+        break unless ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t'
+        @pos += 1
+      end
+    end
+
+    def peek : Char
+      fail("unexpected end") if @pos >= @s.size
+      @s[@pos]
+    end
+
+    def expect(ch : Char)
+      fail("expected #{ch}") unless peek == ch
+      @pos += 1
+    end
+
+    def literal(word : String)
+      fail("expected #{word}") unless @pos + word.size <= @s.size && @s.Substring(@pos, word.size) == word
+      @pos += word.size
+    end
+
+    def read_value : Object
+      skip_ws
+      ch = peek
+      if ch == '{'
+        read_object
+      elsif ch == '['
+        read_array
+      elsif ch == '"'
+        read_string
+      elsif ch == 't'
+        literal("true")
         true
-      elsif kind == System.Text.Json.JsonValueKind.False
+      elsif ch == 'f'
+        literal("false")
         false
+      elsif ch == 'n'
+        literal("null")
+        Json::NULL
       else
-        nil
+        read_number
+      end
+    end
+
+    def read_object : Object
+      h = Hash(String, Object).new
+      expect('{')
+      skip_ws
+      if peek == '}'
+        @pos += 1
+        return h
+      end
+      while true
+        skip_ws
+        key = read_string
+        skip_ws
+        expect(':')
+        h[key] = read_value
+        skip_ws
+        if peek == ','
+          @pos += 1
+        else
+          expect('}')
+          return h
+        end
+      end
+      h
+    end
+
+    def read_array : Object
+      l = List(Object).new
+      expect('[')
+      skip_ws
+      if peek == ']'
+        @pos += 1
+        return l
+      end
+      while true
+        l << read_value
+        skip_ws
+        if peek == ','
+          @pos += 1
+        else
+          expect(']')
+          return l
+        end
+      end
+      l
+    end
+
+    def read_string : String
+      expect('"')
+      sb = System.Text.StringBuilder.new
+      while true
+        ch = peek
+        @pos += 1
+        if ch == '"'
+          return sb.ToString
+        elsif ch == '\\'
+          e = peek
+          @pos += 1
+          if e == 'n'
+            sb.Append('\n')
+          elsif e == 't'
+            sb.Append('\t')
+          elsif e == 'r'
+            sb.Append('\r')
+          elsif e == 'b'
+            sb.Append('\b')
+          elsif e == 'f'
+            sb.Append('\f')
+          elsif e == 'u'
+            fail("bad unicode escape") if @pos + 4 > @s.size
+            code = 0
+            for k in 0...4
+              code = code * 16 + hex(@s[@pos + k])
+            end
+            @pos += 4
+            sb.Append(code.chr)
+          else
+            sb.Append(e)
+          end
+        else
+          sb.Append(ch)
+        end
+      end
+      ""
+    end
+
+    def hex(ch : Char) : Int32
+      return ch.to_i - 48 if ch >= '0' && ch <= '9'
+      return ch.to_i - 87 if ch >= 'a' && ch <= 'f'
+      return ch.to_i - 55 if ch >= 'A' && ch <= 'F'
+      fail("bad hex digit")
+      0
+    end
+
+    def read_number : Object
+      start = @pos
+      is_float = false
+      @pos += 1 if peek == '-'
+      while @pos < @s.size
+        ch = @s[@pos]
+        if ch >= '0' && ch <= '9'
+          @pos += 1
+        elsif ch == '.' || ch == 'e' || ch == 'E' || ch == '+' || ch == '-'
+          is_float = true
+          @pos += 1
+        else
+          break
+        end
+      end
+      fail("expected value") if @pos == start
+      text = @s.Substring(start, @pos - start)
+      if is_float
+        Float64.Parse(text, System.Globalization.CultureInfo.InvariantCulture)
+      else
+        Int64.Parse(text)
       end
     end
   end

@@ -52,3 +52,18 @@ def test_json_decode_roundtrip
   v = BunnyKit::Json.decode("{\"a\":[1,\"b\",null,true],\"c\":{\"d\":2.5}}")
   assert_equal "{\"a\":[1,\"b\",null,true],\"c\":{\"d\":2.5}}", BunnyKit::Json.encode(v)
 end
+
+def test_json_decode_escapes_and_numbers
+  v = BunnyKit::Json.decode(" [\"\\u00e9\\n\", -1.5e2, 0] ")
+  assert_equal "[\"é\\n\",-150,0]", BunnyKit::Json.encode(v)
+end
+
+def test_json_decode_rejects_garbage
+  raised = false
+  begin
+    BunnyKit::Json.decode("{\"a\":1,}")
+  rescue e : System.FormatException
+    raised = true
+  end
+  assert raised, "trailing comma is invalid"
+end
