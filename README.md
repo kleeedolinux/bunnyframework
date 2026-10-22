@@ -270,6 +270,9 @@ Measured with `wrk -t4 -c64 -d5s` on the generated app (debug build, logger on, 
 scripts/test.sh     # every package suite, architecture check, proofs, fmt, example app tests
 ```
 
+Browser check of LiveView (real Chromium over CDP): see the header of `scripts/e2e/liveview.mjs`.
+Verified: clicks in the page update the counter through `bunny.js`, 0 → 1 → 2 → 3 → 2, with no console errors.
+
 Alice notes that shape the code (see `archicture/README.md`): one root module per package; classes
 that apps subclass are `abstract`; overridable hooks are abstract, because Alice only emits virtual
 methods for abstract or locally overridden ones.
