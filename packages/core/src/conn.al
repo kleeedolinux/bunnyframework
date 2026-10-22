@@ -15,6 +15,8 @@ module Bunny
     property path_params : Hash(String, String) = Hash(String, String).new
     # Set by a plug that takes over the socket (e.g. WebSocket upgrade).
     property upgrade : String = ""
+    property resp_cookies : List(String) = List(String).new
+    @cookie_cache : Hash(String, String)? = nil
     @query_cache : Hash(String, String)? = nil
     @body_cache : Hash(String, String)? = nil
 
@@ -65,6 +67,29 @@ module Bunny
 
     def has_param?(name : String) : Bool
       @path_params.has_key?(name) || body_params.has_key?(name) || query_params.has_key?(name)
+    end
+
+    def cookies : Hash(String, String)
+      cached = @cookie_cache
+      return cached.not_nil! unless cached.nil?
+      parsed = Hash(String, String).new
+      for part in req_header("cookie").split(";")
+        kv = part.Trim
+        eq = kv.IndexOf("=")
+        parsed[kv.Substring(0, eq)] = kv.Substring(eq + 1) if eq > 0
+      end
+      @cookie_cache = parsed
+      parsed
+    end
+
+    def put_resp_cookie(name : String, value : String) : Conn
+      @resp_cookies << "#{name}=#{value}; Path=/; HttpOnly; SameSite=Lax"
+      self
+    end
+
+    def put_resp_cookie(name : String, value : String, attrs : String) : Conn
+      @resp_cookies << "#{name}=#{value}; #{attrs}"
+      self
     end
 
     def req_header(name : String) : String
