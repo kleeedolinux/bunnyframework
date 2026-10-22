@@ -17,5 +17,5 @@ def test_prove_targets_in_framework
     names << System.IO.Path.GetFileName(d)
   end
   names.Sort
-  assert_equal "api core realtime shared", String.Join(" ", names)
+  assert_equal "api core postgres realtime shared", String.Join(" ", names)
 end

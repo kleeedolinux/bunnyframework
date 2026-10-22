@@ -7,6 +7,7 @@
 | realtime | `BunnyLive` | PubSub (fork/join fan-out), Socket/Channel (Phoenix V2 wire), Presence, LiveView, `/bunny.js` | depend on proxy/api/controller |
 | proxy | `BunnyServer` | Kestrel hosting, Conn <-> HttpContext, `KestrelSocket` | contain request logic |
 | api | `BunnyApi` | JSON error shapes, pagination, CORS, bearer auth | depend on realtime/proxy |
+| postgres | `BunnyPg` | `PgAdapter` (Npgsql), `Migrator`, proven `Ident` | write SQL with unchecked identifiers |
 | controller | `BunnyCli` (exe `bunny`) | new/compile/server/routes/test/gen.*/arch | link app code; it shells out to `alice` |
 
 App layout made by `bunny new`: `src/main.al` (composition root), `src/router.al` (`App`), `src/controllers`, `src/live`, `src/channels`, `templates/**/*.html.eal`, `src/_eal/` (generated, ignored), `priv/static`.

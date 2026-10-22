@@ -54,3 +54,27 @@ def test_write_plan_refuses_overwrite
   assert_equal 0, BunnyCli::Gen.write(dir, plan, false).size
   System.IO.Directory.Delete(dir, true)
 end
+
+def test_new_app_has_database_wiring
+  plan = BunnyCli::Gen.new_app("blog", "/opt/bunny")
+  assert plan_body(plan, "alice.toml").Contains("postgres = { path = \"/opt/bunny/packages/postgres\" }"), "pg dep"
+  router = plan_body(plan, "src/router.al")
+  assert router.Contains("DATABASE_URL"), router
+  assert router.Contains("BunnyPg::PgAdapter.new"), router
+  assert plan_body(plan, "src/main.al").Contains("BunnyPg::Migrator.new"), "migrate mode"
+  assert plan_has(plan, "priv/migrations/.keep"), "migrations dir"
+end
+
+def test_gen_migration
+  plan = BunnyCli::Gen.migration("AddTags", "20261022120000")
+  assert plan_has(plan, "priv/migrations/20261022120000_add_tags.sql"), "file"
+end
+
+def test_gen_resource_writes_typed_migration
+  plan = BunnyCli::Gen.resource_with_stamp("Post", BunnyCli::Names.fields(["title:string", "body:text", "views:integer"]), "20261022120000")
+  sql = plan_body(plan, "priv/migrations/20261022120000_create_posts.sql")
+  assert sql.Contains("CREATE TABLE posts ("), sql
+  assert sql.Contains("id bigserial PRIMARY KEY"), sql
+  assert sql.Contains("title text NOT NULL"), sql
+  assert sql.Contains("views integer NOT NULL"), sql
+end

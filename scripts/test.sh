@@ -2,7 +2,8 @@
 # Runs every package test suite, the architecture check and the example app tests.
 set -e
 root=$(cd "$(dirname "$0")/.." && pwd)
-for p in shared core realtime proxy api controller; do
+docker compose -f "$root/docker-compose.yml" up -d --wait postgres >/dev/null
+for p in shared core realtime proxy api postgres controller; do
   echo "== $p"
   (cd "$root/packages/$p" && alice test)
 done

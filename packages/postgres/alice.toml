@@ -1,0 +1,9 @@
+[package]
+name = "postgres"
+version = "0.1.0"
+kind = "lib"
+
+[dependencies]
+core = { path = "../core" }
+shared = { path = "../shared" }
+Npgsql = "10.0.3"

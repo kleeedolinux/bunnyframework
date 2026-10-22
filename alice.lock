@@ -3,3 +3,4 @@
 "Microsoft.AspNetCore.Hosting" = "2.3.0"
 "Microsoft.AspNetCore.Server.Kestrel" = "2.3.0"
 "Microsoft.AspNetCore.WebSockets" = "2.3.0"
+"Npgsql" = "10.0.3"

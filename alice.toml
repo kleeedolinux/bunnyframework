@@ -1,2 +1,2 @@
 [workspace]
-members = ["packages/shared", "packages/core", "packages/realtime", "packages/proxy", "packages/api", "packages/controller"]
+members = ["packages/shared", "packages/core", "packages/realtime", "packages/proxy", "packages/api", "packages/controller", "packages/postgres"]

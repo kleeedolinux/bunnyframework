@@ -9,3 +9,4 @@ core = { path = "../../packages/core" }
 realtime = { path = "../../packages/realtime" }
 proxy = { path = "../../packages/proxy" }
 api = { path = "../../packages/api" }
+postgres = { path = "../../packages/postgres" }

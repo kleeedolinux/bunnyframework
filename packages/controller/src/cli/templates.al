@@ -14,7 +14,9 @@ Usage: bunny <command> [args]
   gen.controller <Name> [actions] controller + templates
   gen.live <Name>                 LiveView + template
   gen.channel <Name>              channel
-  gen.resource <Name> field:type  CRUD controller + templates (types: string, text, integer)
+  gen.resource <Name> field:type  CRUD controller + templates + migration (string, text, integer, boolean)
+  gen.migration <Name>            empty SQL migration in priv/migrations
+  migrate                         apply priv/migrations to DATABASE_URL (PostgreSQL)
   arch                            check workspace dependency rules (framework repo)
   prove [--check]                 prove RULES.al (every package in the framework root, or this app)
   version                         print the version
@@ -28,9 +30,19 @@ T
 EalViews.install
 App.install_live
 router = App.router
-if System.Environment.GetCommandLineArgs.Contains("routes")
+argv = System.Environment.GetCommandLineArgs
+if argv.Contains("routes")
   for line in router.routes
     puts line
+  end
+elsif argv.Contains("migrate")
+  url = System.Environment.GetEnvironmentVariable("DATABASE_URL") || ""
+  if url == ""
+    puts "set DATABASE_URL (e.g. Host=127.0.0.1;Port=5432;Username=app;Password=app;Database=app)"
+  else
+    for f in BunnyPg::Migrator.new(url, "priv/migrations").run
+      puts "migrated " + f
+    end
   end
 else
   sockets = BunnyLive::SocketHandler.new(App::PUBSUB)
@@ -56,7 +68,14 @@ T
 # Routes, pipelines and app-wide singletons for __APP__.
 module App
   PUBSUB = BunnyLive::PubSub.new
-  REPO = Bunny::Repo.new(Bunny::MemoryAdapter.new)
+  # PostgreSQL when DATABASE_URL is set (run `bunny migrate`), in-memory otherwise.
+  REPO = Bunny::Repo.new(App.adapter)
+
+  def self.adapter : Bunny::Adapter
+    url = System.Environment.GetEnvironmentVariable("DATABASE_URL") || ""
+    return Bunny::MemoryAdapter.new if url == ""
+    BunnyPg::PgAdapter.new(url)
+  end
 
   def self.repo : Bunny::Repo
     REPO

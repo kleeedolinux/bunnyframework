@@ -20,6 +20,8 @@ module BunnyCli
         when "gen.live" then gen(cwd, rest, force, "live")
         when "gen.channel" then gen(cwd, rest, force, "channel")
         when "gen.resource" then gen(cwd, rest, force, "resource")
+        when "gen.migration" then gen(cwd, rest, force, "migration")
+        when "migrate" then cmd_alice(cwd, ["run", "--", "migrate"].ToList)
         when "arch" then cmd_arch(cwd)
         when "prove" then Prove.run(cwd, rest.Contains("--check"))
         when "version", "-v", "--version" then say(VERSION_TEXT)
@@ -125,8 +127,11 @@ module BunnyCli
       when "channel"
         plan = Gen.channel(name)
         hint = "Register in src/main.al: sockets.channel(\"" + Names.snake(name) + ":*\", ->() { " + Names.camel(Names.snake(name)) + "Channel.new.as(BunnyLive::Channel) })"
+      when "migration"
+        plan = Gen.migration(name, Gen.stamp)
+        hint = "Write SQL, then: DATABASE_URL=... bunny migrate"
       else
-        plan = Gen.resource(name, Names.fields(extra))
+        plan = Gen.resource_with_stamp(name, Names.fields(extra), Gen.stamp)
         hint = "Add to the browser scope in src/router.al:\n" + Gen.resource_routes(name)
       end
       for f in Gen.write(cwd, plan, force)

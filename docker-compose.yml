@@ -1,0 +1,15 @@
+# Local development and integration tests. PostgreSQL major 17, minor pinned deliberately.
+services:
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: bunny
+      POSTGRES_PASSWORD: bunny
+      POSTGRES_DB: bunny_test
+    ports:
+      - "55417:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bunny -d bunny_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

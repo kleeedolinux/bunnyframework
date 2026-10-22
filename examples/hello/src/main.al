@@ -2,9 +2,19 @@
 EalViews.install
 App.install_live
 router = App.router
-if System.Environment.GetCommandLineArgs.Contains("routes")
+argv = System.Environment.GetCommandLineArgs
+if argv.Contains("routes")
   for line in router.routes
     puts line
+  end
+elsif argv.Contains("migrate")
+  url = System.Environment.GetEnvironmentVariable("DATABASE_URL") || ""
+  if url == ""
+    puts "set DATABASE_URL (e.g. Host=127.0.0.1;Port=5432;Username=app;Password=app;Database=app)"
+  else
+    for f in BunnyPg::Migrator.new(url, "priv/migrations").run
+      puts "migrated " + f
+    end
   end
 else
   sockets = BunnyLive::SocketHandler.new(App::PUBSUB)

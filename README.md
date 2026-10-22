@@ -37,6 +37,7 @@ Kestrel ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ R
 | `packages/realtime` | `BunnyLive` | WebSocket protocol, PubSub, Channels, Presence, LiveView |
 | `packages/proxy` | `BunnyServer` | Transport: Kestrel (NuGet) for HTTP/1.1 and WebSockets, adapted to `Bunny::Conn` |
 | `packages/api` | `BunnyApi` | JSON API helpers: error shapes, pagination, CORS, bearer auth |
+| `packages/postgres` | `BunnyPg` | PostgreSQL 17 adapter (Npgsql) and SQL migrations |
 | `packages/controller` | `BunnyCli` | The `bunny` command line |
 
 Dependency direction (enforced by tests):
@@ -45,6 +46,7 @@ Dependency direction (enforced by tests):
 shared <- core <- api
                <- realtime
                <- proxy
+               <- postgres
                <- controller
 ```
 
@@ -71,7 +73,9 @@ bunny compile                  # templates/**/*.html.eal -> src/_eal/
 bunny gen.controller Posts index show
 bunny gen.live Clock           # LiveView + template
 bunny gen.channel Room         # channel
-bunny gen.resource Post title:string body:text views:integer   # CRUD controller + templates + route lines
+bunny gen.resource Post title:string body:text views:integer   # CRUD controller + templates + migration
+bunny gen.migration AddTags    # empty SQL migration
+bunny migrate                  # apply priv/migrations to DATABASE_URL
 bunny test                     # compile templates + alice test
 bunny arch                     # check the framework's dependency rules
 bunny prove [--check]          # prove RULES.al (framework packages or this app)
@@ -199,7 +203,19 @@ The first request renders full HTML inside the layout. `/bunny.js` (no build ste
 
 ### Data
 
-`Bunny::Repo` stores records through an adapter (in-memory included). `Bunny::Changeset` casts and
+`Bunny::Repo` stores records through an adapter: `Bunny::MemoryAdapter` (dev/test) or
+`BunnyPg::PgAdapter` (PostgreSQL 17, pooled Npgsql). Generated apps pick PostgreSQL when `DATABASE_URL`
+is set. Migrations are plain SQL in `priv/migrations/`, applied in order, one transaction each,
+and recorded in `bunny_schema_migrations`. Table and column names pass a proven identifier
+check, and values are bound parameters that PostgreSQL coerces to the column types.
+
+```bash
+docker compose up -d --wait postgres          # PostgreSQL 17.6 on :55417
+export DATABASE_URL="Host=127.0.0.1;Port=55417;Username=bunny;Password=bunny;Database=bunny_test"
+bunny migrate && bunny server
+```
+
+ `Bunny::Changeset` casts and
 validates params before anything is written (`validate_required`, `validate_length`, `validate_format`,
 `validate_number`). `BunnyApi::Render.changeset_errors` turns failures into `422 {"errors":{...}}`.
 
@@ -217,6 +233,7 @@ fails when a rule breaks or the sources changed since the last proof.
 | realtime | fork/join fan-out reaches every subscriber exactly once (0..100k) and every split progresses | 1.1M |
 | realtime | applying a LiveView diff to the last render rebuilds the new render; no diff when unchanged | 164k |
 | api | pagination never leaves bounds and its pages partition the list | 3.4M |
+| postgres | SQL identifiers accept only `[a-z_][a-z0-9_]`, 1..63 chars, for every char in every position | 196k |
 
 Each `RULES.al` names its dependency-free sources on a header line, e.g.
 `# prove-with: src/eal/compiler.al`. In an app, `bunny prove` proves the app's own `RULES.al`.
@@ -247,7 +264,8 @@ alice.toml            workspace
 packages/*            the six packages (see above)
 examples/hello        example app: the composition root wiring every package
 archicture/           architecture map, ADRs, module notes
-scripts/              install.sh, test.sh
+scripts/              install.sh, test.sh, regen-example.sh
+docker-compose.yml    PostgreSQL 17 for dev and integration tests
 CHANGELOG.md
 ```
 

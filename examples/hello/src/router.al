@@ -1,7 +1,14 @@
 # Routes, pipelines and app-wide singletons for hello.
 module App
   PUBSUB = BunnyLive::PubSub.new
-  REPO = Bunny::Repo.new(Bunny::MemoryAdapter.new)
+  # PostgreSQL when DATABASE_URL is set (run `bunny migrate`), in-memory otherwise.
+  REPO = Bunny::Repo.new(App.adapter)
+
+  def self.adapter : Bunny::Adapter
+    url = System.Environment.GetEnvironmentVariable("DATABASE_URL") || ""
+    return Bunny::MemoryAdapter.new if url == ""
+    BunnyPg::PgAdapter.new(url)
+  end
 
   def self.repo : Bunny::Repo
     REPO

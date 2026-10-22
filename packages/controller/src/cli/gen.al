@@ -17,7 +17,7 @@ module BunnyCli
       p = bunny_path.TrimEnd('/')
       plan = List(FileOut).new
       toml = "[package]\nname = \"#{name}\"\nversion = \"0.1.0\"\nkind = \"exe\"\n\n[dependencies]\n"
-      for pkg in ["shared", "core", "realtime", "proxy", "api"]
+      for pkg in ["shared", "core", "realtime", "proxy", "api", "postgres"]
         toml += "#{pkg} = { path = \"#{p}/packages/#{pkg}\" }\n"
       end
       plan << FileOut.new("alice.toml", toml)
@@ -30,6 +30,7 @@ module BunnyCli
       plan << FileOut.new("templates/page/home.html.eal", Templates::HOME)
       plan << FileOut.new("templates/live/counter.html.eal", Templates::COUNTER)
       plan << FileOut.new("priv/static/app.css", Templates::CSS)
+      plan << FileOut.new("priv/migrations/.keep", "")
       plan << FileOut.new("test/router_test.al", Templates::APP_TEST)
       plan << FileOut.new("README.md", "# #{name}\n\nA Bunny Framework app.\n\n```bash\nbunny server   # http://localhost:4000\nbunny test\nbunny routes\n```\n")
       plan
@@ -71,6 +72,38 @@ module BunnyCli
       plan
     end
 
+    # BUNNY_STAMP pins the timestamp (reproducible generation).
+    def self.stamp : String
+      fixed = System.Environment.GetEnvironmentVariable("BUNNY_STAMP") || ""
+      return fixed if fixed.size > 0
+      System.DateTime.UtcNow.ToString("yyyyMMddHHmmss")
+    end
+
+    def self.migration(name : String, stamp : String) : List(FileOut)
+      plan = List(FileOut).new
+      plan << FileOut.new("priv/migrations/#{stamp}_#{Names.snake(name)}.sql", "-- #{name}\n")
+      plan
+    end
+
+    def self.sql_type(kind : String) : String
+      return "integer" if kind == "integer"
+      return "boolean" if kind == "boolean"
+      "text"
+    end
+
+    def self.resource_with_stamp(name : String, fields : List(Field), stamp : String) : List(FileOut)
+      table = Names.plural(Names.snake(name))
+      cols = List(String).new
+      cols << "  id bigserial PRIMARY KEY"
+      for f in fields
+        cols << "  #{f.name} #{sql_type(f.kind)} NOT NULL"
+      end
+      cols << "  inserted_at timestamptz NOT NULL DEFAULT now()"
+      plan = resource(name, fields)
+      plan << FileOut.new("priv/migrations/#{stamp}_create_#{table}.sql", "CREATE TABLE #{table} (\n#{String.Join(",\n", cols)}\n);\n")
+      plan
+    end
+
     def self.resource(name : String, fields : List(Field)) : List(FileOut)
       base = Names.snake(name)
       table = Names.plural(base)
@@ -79,9 +112,9 @@ module BunnyCli
       for f in fields
         names << "\"#{f.name}\""
       end
-      validations = "      .validate_required([#{String.Join(", ", names)}])\n"
+      validations = "    .validate_required([#{String.Join(", ", names)}])\n"
       for f in fields
-        validations += "      .validate_number(\"#{f.name}\", -2147483648_i64, 2147483647_i64)\n" if f.kind == "integer"
+        validations += "    .validate_number(\"#{f.name}\", -2147483648_i64, 2147483647_i64)\n" if f.kind == "integer"
       end
       src = Templates::RESOURCE.Replace("__CLASS__", cls).Replace("__TABLE__", table).Replace("__FIELDS__", String.Join(", ", names)).Replace("__VALIDATIONS__", validations).Replace("__SINGULAR__", base)
       plan = List(FileOut).new
