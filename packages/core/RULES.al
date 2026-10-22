@@ -1,4 +1,4 @@
-# prove-with: src/eal/compiler.al
+# prove-with: src/eal/compiler.al src/secure.al
 # Bunny Hole invariants, proven by exhaustion (`alice prove`).
 
 # Specification of a well-formed template: blocks balance, else/end never appear outside a block.
@@ -65,4 +65,22 @@ for i in 0...8
   return false if plan[i] < Bunny::Eal.a_static || plan[i] > Bunny::Eal.a_skip
 end
 true
+end
+
+pure def word_of(x : Int32, n : Int32) : String
+  s = ""
+  v = x
+  for i in 0...n
+    s = s + (v % 2 == 0 ? "a" : "b")
+    v = v / 2
+  end
+  s
+end
+
+# The constant-time comparison used for CSRF tokens and session signatures agrees with `==`
+# on every pair of strings over {a, b} up to length 5.
+rule secure_equal_matches_eq(la in 0..5, lb in 0..5, xa in 0...32, xb in 0...32)
+a = word_of(xa, la)
+b = word_of(xb, lb)
+Bunny::Secure.equal?(a, b) == (a == b)
 end

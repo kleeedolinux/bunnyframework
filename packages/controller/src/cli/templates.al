@@ -54,6 +54,8 @@ else
   endpoint.plug(Bunny::Plugs::Head.new)
   endpoint.plug(Bunny::Plugs::MethodOverride.new)
   endpoint.plug(Bunny::Plugs::Static.new("/static", "priv/static"))
+  secret = System.Environment.GetEnvironmentVariable("SECRET_KEY_BASE") || "dev-only-secret-change-me-in-production-0123456789"
+  endpoint.plug(Bunny::Plugs::Session.new(secret))
   endpoint.plug(BunnyLive::Assets.new)
   endpoint.plug(sockets.mount("/socket"))
   port = Int32.Parse(System.Environment.GetEnvironmentVariable("PORT") || "4000")
@@ -85,7 +87,8 @@ module App
     r = Bunny::Router.new
     r.pipeline("browser") do |p|
       p.plug(Bunny::Plugs::SecureHeaders.new)
-      p.plug(->(c : Bunny::Conn) { Bunny::Controller.put_layout(c, "layouts/app") })
+      p.plug(Bunny::Plugs::Csrf.new)
+      p.plug(->(c : Bunny::Conn) { App.browser_assigns(c) })
     end
     r.pipeline("api") do |p|
       p.plug(->(c : Bunny::Conn) { c.put_resp_header("cache-control", "no-store") })
@@ -98,6 +101,14 @@ module App
       s.get("/health", ->(c : Bunny::Conn) { c.text("ok") })
     end
     r
+  end
+
+  # Layout and assigns every browser page gets.
+  def self.browser_assigns(c : Bunny::Conn) : Bunny::Conn
+    c.assign("csrf_token", c.csrf_token)
+    c.assign("flash_info", c.flash("info"))
+    c.assign("flash_error", c.flash("error"))
+    Bunny::Controller.put_layout(c, "layouts/app")
   end
 
   def self.install_live : Nil
@@ -140,18 +151,23 @@ end
 T
 
     LAYOUT = <<-T
-<%@ inner_content : String %>
+<%@ inner_content : String, csrf_token : String, flash_info : String, flash_error : String %>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="<%= csrf_token %>">
   <title>__APP__</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <header><a href="/">__APP__</a></header>
-  <main><%== inner_content %></main>
+  <main>
+    <% if flash_info.size > 0 %><p class="flash info"><%= flash_info %></p><% end %>
+    <% if flash_error.size > 0 %><p class="flash error"><%= flash_error %></p><% end %>
+    <%== inner_content %>
+  </main>
 </body>
 </html>
 T
@@ -177,6 +193,9 @@ header a { font-weight: 700; text-decoration: none; color: inherit; }
 main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
 button { font-size: 1.1rem; padding: 4px 14px; }
 .error { color: #b42318; }
+.flash { padding: 8px 12px; border-radius: 6px; }
+.flash.info { background: #e6f4ea; }
+.flash.error { background: #fdecea; }
 T
 
     APP_TEST = <<-T
@@ -247,7 +266,10 @@ class __CLASS__ < Bunny::Controller
 
   def create(c : Bunny::Conn) : Bunny::Conn
     result = App.repo.insert("__TABLE__", changeset(c))
-    return c.redirect("/__TABLE__/" + result.record.not_nil!.id.to_s) if result.ok?()
+    if result.ok?()
+      c.put_flash("info", "__SINGULAR__ created")
+      return c.redirect("/__TABLE__/" + result.record.not_nil!.id.to_s)
+    end
     c.assign("errors", String.Join(", ", result.changeset.errors))
     render(c.put_status(422), "__TABLE__/new")
   end

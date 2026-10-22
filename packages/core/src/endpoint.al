@@ -23,11 +23,20 @@ module Bunny
         c = @plugs.run(c)
         c = @router.dispatch(c) unless c.halted
         c.resp_body = "" if c.assigns.has_key?("__head")
-        c
+        Endpoint.finish(c)
       rescue e : System.Exception
         msg = @debug ? "Internal Server Error\n\n#{e}" : "Internal Server Error"
-        c.put_status(500).text(msg)
+        Endpoint.finish(c.put_status(500).text(msg))
       end
+    end
+
+    def self.finish(c : Conn) : Conn
+      i = c.before_send.size - 1
+      while i >= 0
+        c = c.before_send[i].Invoke(c)
+        i -= 1
+      end
+      c
     end
   end
 end

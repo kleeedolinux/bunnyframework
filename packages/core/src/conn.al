@@ -1,6 +1,9 @@
 # Conn: request in, response out. Every plug is Conn -> Conn.
 module Bunny
   class Conn
+    FLASH_PREFIX = "_flash."
+    CSRF_KEY = "_csrf_token"
+
     property method : String
     property path : String
     property query_string : String = ""
@@ -16,6 +19,11 @@ module Bunny
     # Set by a plug that takes over the socket (e.g. WebSocket upgrade).
     property upgrader : Upgrader? = nil
     property resp_cookies : List(String) = List(String).new
+    # Run by the Endpoint after the router, last registered first (e.g. write the session cookie).
+    getter before_send : List(Func(Conn, Conn)) = List(Func(Conn, Conn)).new
+    getter session : Hash(String, String) = Hash(String, String).new
+    property session_changed : Bool = false
+    getter flash_in : Hash(String, String) = Hash(String, String).new
     @cookie_cache : Hash(String, String)? = nil
     @query_cache : Hash(String, String)? = nil
     @body_cache : Hash(String, String)? = nil
@@ -90,6 +98,52 @@ module Bunny
     def put_resp_cookie(name : String, value : String, attrs : String) : Conn
       @resp_cookies << "#{name}=#{value}; #{attrs}"
       self
+    end
+
+    def register_before_send(f : Func(Conn, Conn)) : Conn
+      @before_send << f
+      self
+    end
+
+    def put_session(key : String, value : String) : Conn
+      @session[key] = value
+      @session_changed = true
+      self
+    end
+
+    def get_session(key : String) : String
+      @session.fetch(key, "")
+    end
+
+    def delete_session(key : String) : Conn
+      @session_changed = true if @session.Remove(key)
+      self
+    end
+
+    def clear_session : Conn
+      @session.Clear
+      @session_changed = true
+      self
+    end
+
+    # Message for the next request (redirect-after-post).
+    def put_flash(kind : String, msg : String) : Conn
+      put_session(Conn::FLASH_PREFIX + kind, msg)
+    end
+
+    # Flash set by the previous request.
+    def flash(kind : String) : String
+      @flash_in.fetch(kind, "")
+    end
+
+    # Per-session CSRF token, created on first use.
+    def csrf_token : String
+      t = get_session(Conn::CSRF_KEY)
+      if t.size == 0
+        t = Secure.random_token
+        put_session(Conn::CSRF_KEY, t)
+      end
+      t
     end
 
     def req_header(name : String) : String

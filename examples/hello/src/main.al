@@ -27,6 +27,8 @@ else
   endpoint.plug(Bunny::Plugs::Head.new)
   endpoint.plug(Bunny::Plugs::MethodOverride.new)
   endpoint.plug(Bunny::Plugs::Static.new("/static", "priv/static"))
+  secret = System.Environment.GetEnvironmentVariable("SECRET_KEY_BASE") || "dev-only-secret-change-me-in-production-0123456789"
+  endpoint.plug(Bunny::Plugs::Session.new(secret))
   endpoint.plug(BunnyLive::Assets.new)
   endpoint.plug(sockets.mount("/socket"))
   port = Int32.Parse(System.Environment.GetEnvironmentVariable("PORT") || "4000")

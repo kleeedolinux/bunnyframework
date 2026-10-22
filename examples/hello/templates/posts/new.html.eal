@@ -1,7 +1,8 @@
-<%@ errors : String %>
+<%@ errors : String, csrf_token : String %>
 <h1>New post</h1>
 <% if errors.size > 0 %><p class="error"><%= errors %></p><% end %>
 <form method="post" action="/posts">
+  <input type="hidden" name="_csrf_token" value="<%= csrf_token %>">
   <label>title <input name="title"></label>
   <label>body <textarea name="body"></textarea></label>
   <label>views <input name="views" type="number"></label>

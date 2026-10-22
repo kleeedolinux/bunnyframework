@@ -20,7 +20,10 @@ class PostController < Bunny::Controller
 
   def create(c : Bunny::Conn) : Bunny::Conn
     result = App.repo.insert("posts", changeset(c))
-    return c.redirect("/posts/" + result.record.not_nil!.id.to_s) if result.ok?()
+    if result.ok?()
+      c.put_flash("info", "post created")
+      return c.redirect("/posts/" + result.record.not_nil!.id.to_s)
+    end
     c.assign("errors", String.Join(", ", result.changeset.errors))
     render(c.put_status(422), "posts/new")
   end

@@ -13,4 +13,5 @@
 - `bunny` CLI: new, server, compile, routes, test, gen.controller/live/channel/resource, arch, version.
 - RULES.al/PROOF.al in shared, core, realtime, api: 14 rules proven by exhaustion (escaping, JSON, EAL split, fan-out, LiveView diffs, pagination); `bunny prove [--check]`.
 - BunnyPg: PostgreSQL 17 adapter (Npgsql 10.0.3) and transactional SQL migrations; `bunny migrate`, `gen.migration`; `gen.resource` writes a migration; apps use PostgreSQL when `DATABASE_URL` is set; docker-compose with postgres:17.6.
+- Signed-cookie sessions, flash, CSRF protection (`Plugs::Session`, `Plugs::Csrf`, `before_send` hooks); constant-time `Secure.equal?` proven; generated apps wire them in.
 - `examples/hello` generated app (`scripts/regen-example.sh`); `scripts/install.sh`, `scripts/test.sh`.

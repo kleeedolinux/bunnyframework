@@ -122,7 +122,7 @@ module BunnyCli
       title = fields.size > 0 ? fields[0].name : "id"
       index = "<%@ #{table} : List(Bunny::Record) %>\n<h1>#{Names.camel(table)}</h1>\n<a href=\"/#{table}/new\">New #{base}</a>\n<ul>\n<% for r in #{table} %>\n  <li><a href=\"/#{table}/<%= r.id %>\"><%= r[\"#{title}\"] %></a></li>\n<% end %>\n</ul>\n"
       show = "<%@ #{base} : Bunny::Record %>\n<h1>#{Names.camel(base)} <%= #{base}.id %></h1>\n"
-      form = "<%@ errors : String %>\n<h1>New #{base}</h1>\n<% if errors.size > 0 %><p class=\"error\"><%= errors %></p><% end %>\n<form method=\"post\" action=\"/#{table}\">\n"
+      form = "<%@ errors : String, csrf_token : String %>\n<h1>New #{base}</h1>\n<% if errors.size > 0 %><p class=\"error\"><%= errors %></p><% end %>\n<form method=\"post\" action=\"/#{table}\">\n  <input type=\"hidden\" name=\"_csrf_token\" value=\"<%= csrf_token %>\">\n"
       for f in fields
         show += "<p><b>#{f.name}:</b> <%= #{base}[\"#{f.name}\"] %></p>\n"
         input = f.kind == "text" ? "<textarea name=\"#{f.name}\"></textarea>" : "<input name=\"#{f.name}\"#{f.kind == "integer" ? " type=\"number\"" : ""}>"

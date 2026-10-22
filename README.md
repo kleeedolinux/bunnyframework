@@ -127,7 +127,23 @@ end
 `Conn` is the one value that carries request, params, assigns and the response. Helpers: `text`, `html`,
 `json`, `redirect`, `put_status`, `put_resp_header`, `put_resp_cookie`, `halt`. Params merge path, body
 (form or JSON) and query. Built-in plugs: `RequestId`, `SecureHeaders`, `MethodOverride`, `Head`,
-`Logger`, `Static`. The `Endpoint` turns exceptions into 500s (with details when `debug`).
+`Logger`, `Static`, `Session`, `Csrf`. The `Endpoint` turns exceptions into 500s (with details when
+`debug`) and runs `before_send` hooks.
+
+### Sessions, flash, CSRF
+
+```alice
+c.put_session("user_id", id).put_flash("info", "Signed in").redirect("/")
+c.get_session("user_id")     # next request
+c.flash("info")              # shown once, then gone
+c.csrf_token                 # per-session token for forms / x-csrf-token
+```
+
+The session is a signed cookie (`HMAC-SHA256`, `HttpOnly`, `SameSite=Lax`; secret from `SECRET_KEY_BASE`),
+and tampered cookies are ignored. `Plugs::Csrf` rejects POST/PUT/PATCH/DELETE without the token (form field
+`_csrf_token` or header `x-csrf-token`) with 403. Tokens and signatures are compared with
+`Bunny::Secure.equal?`, a constant-time comparison proven equal to `==`. Generated apps put CSRF in the
+`browser` pipeline, the token in a `<meta>` tag and in forms, and flash messages in the layout.
 
 ### Templates (EAL: Embedded Alice, `.html.eal`)
 
@@ -229,6 +245,7 @@ fails when a rule breaks or the sources changed since the last proof.
 |---|---|---|
 | shared | every UTF-16 char: HTML entity is safe; `needs_escape?` is exact; JSON escape round-trips; hex digits | 65,536 each |
 | shared | every status 100..599 has a reason | 500 |
+| core | constant-time `Secure.equal?` agrees with `==` on every string pair over {a,b} up to length 5 | 36,864 |
 | core | **EAL templates**: for every 8-token template, the compiler accepts exactly the well-formed ones, and dynamic slots open/close strictly alternating (statics = slots + 1) | 5,764,801 |
 | realtime | fork/join fan-out reaches every subscriber exactly once (0..100k) and every split progresses | 1.1M |
 | realtime | applying a LiveView diff to the last render rebuilds the new render; no diff when unchanged | 164k |

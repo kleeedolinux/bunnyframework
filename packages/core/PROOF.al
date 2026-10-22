@@ -3,6 +3,7 @@
 # exhaustion of the program as Alice compiles it. `alice prove --check` fails when the sources change.
 #
 # alice 0.12.2
-# sources sha256 3e90f87dc7332bfd4943286a95a6cf28f51475df831b2a4ac8f015382e5b408a
+# sources sha256 2b025200f92a3489986ebb9d1341386c994b8e4539c189ac5e2807d682672c9b
 # rule eal_plan_actions_are_known: proven over 5764801 cases
 # rule eal_static_dynamic_split: proven over 5764801 cases
+# rule secure_equal_matches_eq: proven over 36864 cases

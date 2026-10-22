@@ -18,7 +18,8 @@ module App
     r = Bunny::Router.new
     r.pipeline("browser") do |p|
       p.plug(Bunny::Plugs::SecureHeaders.new)
-      p.plug(->(c : Bunny::Conn) { Bunny::Controller.put_layout(c, "layouts/app") })
+      p.plug(Bunny::Plugs::Csrf.new)
+      p.plug(->(c : Bunny::Conn) { App.browser_assigns(c) })
     end
     r.pipeline("api") do |p|
       p.plug(->(c : Bunny::Conn) { c.put_resp_header("cache-control", "no-store") })
@@ -37,6 +38,14 @@ module App
       s.get("/health", ->(c : Bunny::Conn) { c.text("ok") })
     end
     r
+  end
+
+  # Layout and assigns every browser page gets.
+  def self.browser_assigns(c : Bunny::Conn) : Bunny::Conn
+    c.assign("csrf_token", c.csrf_token)
+    c.assign("flash_info", c.flash("info"))
+    c.assign("flash_error", c.flash("error"))
+    Bunny::Controller.put_layout(c, "layouts/app")
   end
 
   def self.install_live : Nil

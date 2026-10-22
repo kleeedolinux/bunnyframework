@@ -4,3 +4,6 @@ header a { font-weight: 700; text-decoration: none; color: inherit; }
 main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
 button { font-size: 1.1rem; padding: 4px 14px; }
 .error { color: #b42318; }
+.flash { padding: 8px 12px; border-radius: 6px; }
+.flash.info { background: #e6f4ea; }
+.flash.error { background: #fdecea; }

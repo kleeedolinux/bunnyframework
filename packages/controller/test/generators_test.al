@@ -78,3 +78,20 @@ def test_gen_resource_writes_typed_migration
   assert sql.Contains("title text NOT NULL"), sql
   assert sql.Contains("views integer NOT NULL"), sql
 end
+
+def test_new_app_has_session_csrf_and_flash
+  plan = BunnyCli::Gen.new_app("blog", "/opt/bunny")
+  assert plan_body(plan, "src/main.al").Contains("Bunny::Plugs::Session.new("), "session plug"
+  router = plan_body(plan, "src/router.al")
+  assert router.Contains("Bunny::Plugs::Csrf.new"), router
+  layout = plan_body(plan, "templates/layouts/app.html.eal")
+  assert layout.Contains("name=\"csrf-token\""), layout
+  assert layout.Contains("flash_info"), layout
+end
+
+def test_resource_form_carries_csrf_token
+  plan = BunnyCli::Gen.resource("Post", BunnyCli::Names.fields(["title:string"]))
+  form = plan_body(plan, "templates/posts/new.html.eal")
+  assert form.Contains("name=\"_csrf_token\""), form
+  assert plan_body(plan, "src/controllers/post_controller.al").Contains("put_flash(\"info\""), "flash on create"
+end
