@@ -1,0 +1,11 @@
+[package]
+name = "hello"
+version = "0.1.0"
+kind = "exe"
+
+[dependencies]
+shared = { path = "../../packages/shared" }
+core = { path = "../../packages/core" }
+realtime = { path = "../../packages/realtime" }
+proxy = { path = "../../packages/proxy" }
+api = { path = "../../packages/api" }

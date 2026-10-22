@@ -24,11 +24,9 @@ module BunnyLive
     abstract def template : String
     abstract def mount(params : Hash(String, Object), s : LiveState) : Nil
 
-    def handle_event(event : String, params : Hash(String, Object), s : LiveState) : Nil
-    end
-
-    def handle_info(event : String, payload : Object, s : LiveState) : Nil
-    end
+    # Abstract on purpose: Alice only emits virtual methods for abstract or locally overridden ones.
+    abstract def handle_event(event : String, params : Hash(String, Object), s : LiveState) : Nil
+    abstract def handle_info(event : String, payload : Object, s : LiveState) : Nil
   end
 
   module Live
@@ -59,7 +57,8 @@ module BunnyLive
       view.mount(params_of(c), state)
       inner = Bunny::Views.fetch(view.template).render(state.assigns)
       id = System.Guid.NewGuid.ToString("N").Substring(0, 12)
-      c.html("<div id=\"lv-#{id}\" bunny-live=\"#{BunnyKit::Html.escape(name)}\">#{inner}</div><script src=\"/bunny.js\"></script>")
+      page = "<div id=\"lv-#{id}\" bunny-live=\"#{BunnyKit::Html.escape(name)}\">#{inner}</div><script src=\"/bunny.js\"></script>"
+      c.html(Bunny::Controller.wrap_layout(c, page))
     end
   end
 

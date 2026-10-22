@@ -23,10 +23,10 @@ Kestrel ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ R
 |---|---|
 | Rails-level productivity | `bunny new`, `bunny gen.*` generators, conventions over configuration |
 | Phoenix-level realtime | Channels, PubSub, Presence and LiveView in the box, one WebSocket per client |
-| High performance | Alice compiles to .NET IL (or NativeAOT); Kestrel transport, pre-compiled route tables, templates parsed once and cached, LiveView sends only the dynamic parts that changed |
+| High performance | Kestrel transport; routes compiled into a segment tree; EAL templates compiled to Alice classes; pure-Alice JSON; fork/join PubSub fan-out with encode-once frames; LiveView sends only changed slots |
 | Explicit data flow | Everything is a `Conn -> Conn` transformation; no hidden globals |
 | Modular | Six packages with one-way dependencies, checked by an architecture test |
-| Low maintenance | Standard library and .NET BCL first; no extra runtime dependencies |
+| Low maintenance | Pure Alice wherever possible; the only NuGet dependency is Kestrel |
 
 ## Packages
 
@@ -36,7 +36,7 @@ Kestrel ─▶ BunnyServer (HTTP/1.1 + WebSocket) ─▶ Endpoint plugs ─▶ R
 | `packages/core` | `Bunny` | **Bunny Hole**: `Conn`, plugs, pipelines, router, controllers, EAL templates, endpoint, data (repo/changesets) |
 | `packages/realtime` | `BunnyLive` | WebSocket protocol, PubSub, Channels, Presence, LiveView |
 | `packages/proxy` | `BunnyServer` | Transport: Kestrel (NuGet) for HTTP/1.1 and WebSockets, adapted to `Bunny::Conn` |
-| `packages/api` | `BunnyApi` | JSON API helpers: JSON rendering, error shapes, pagination |
+| `packages/api` | `BunnyApi` | JSON API helpers: error shapes, pagination, CORS, bearer auth |
 | `packages/controller` | `BunnyCli` | The `bunny` command line |
 
 Dependency direction (enforced by tests):
@@ -50,19 +50,43 @@ shared <- core <- api
 
 Entrypoint packages never depend on each other. An application is the composition root that wires them.
 
+## Install
+
+Requirements: [Alice](https://alice-lang.org/) 0.12+ and the .NET 10 SDK.
+
+```bash
+git clone https://github.com/kleeedolinux/bunnyframework
+cd bunnyframework
+scripts/install.sh            # builds the CLI, links ~/.local/bin/bunny
+```
+
 ## The CLI
 
 ```bash
 bunny new blog                 # new application
 cd blog
-bunny server                   # run the app (http://localhost:4000)
+bunny server                   # compile templates + run (PORT=4000, BUNNY_ENV=prod hides error details)
 bunny routes                   # print the route table
+bunny compile                  # templates/**/*.html.eal -> src/_eal/
 bunny gen.controller Posts index show
-bunny gen.live Counter         # LiveView module + template
-bunny gen.channel Room         # channel module
-bunny gen.resource Post title:string body:text   # schema + controller + views + routes hint
-bunny test                     # alice test
-bunny version
+bunny gen.live Clock           # LiveView + template
+bunny gen.channel Room         # channel
+bunny gen.resource Post title:string body:text views:integer   # CRUD controller + templates + route lines
+bunny test                     # compile templates + alice test
+bunny arch                     # check the framework's dependency rules
+```
+
+A new app:
+
+```text
+src/main.al            composition root: endpoint plugs, sockets, server
+src/router.al          module App: pipelines, scopes, routes, PubSub, Repo
+src/controllers/       controllers
+src/live/              LiveViews
+templates/             *.html.eal (layouts/app, page/home, live/counter)
+src/_eal/              generated view classes (git-ignored)
+priv/static/           static files at /static
+test/                  alice tests
 ```
 
 ## A tour
@@ -72,16 +96,17 @@ bunny version
 ```alice
 router = Bunny::Router.new
 router.pipeline("browser") do |p|
-  p.plug(Bunny::Plugs::Logger.new)
-  p.plug(Bunny::Plugs::PutSecureHeaders.new)
+  p.plug(Bunny::Plugs::SecureHeaders.new)
+  p.plug(->(c : Bunny::Conn) { Bunny::Controller.put_layout(c, "layouts/app") })
 end
-router.scope("/", "browser") do |r|
-  r.get("/", ->(c : Bunny::Conn) { PageController.new.index(c) })
+router.scope("/", ["browser"]) do |r|
+  r.get("/", ->(c : Bunny::Conn) { PageController.new.home(c) })
   r.get("/posts/:id", ->(c : Bunny::Conn) { PostController.new.show(c) })
+  r.get("/files/*path", ->(c : Bunny::Conn) { c.text(c.param("path")) })
 end
 ```
 
-Routes are compiled into a segment tree once at boot. Matching is a walk over path segments, without regex.
+Routes are compiled into a segment tree at boot (static > `:param` > `*wildcard`), with no regex. Unknown paths get 404; a known path with the wrong method gets 405 plus `allow`. Pipelines halt on `c.halt`.
 
 ### Controllers
 
@@ -95,7 +120,9 @@ end
 ```
 
 `Conn` is the one value that carries request, params, assigns and the response. Helpers: `text`, `html`,
-`json`, `redirect`, `put_status`, `put_resp_header`, `halt`.
+`json`, `redirect`, `put_status`, `put_resp_header`, `put_resp_cookie`, `halt`. Params merge path, body
+(form or JSON) and query. Built-in plugs: `RequestId`, `SecureHeaders`, `MethodOverride`, `Head`,
+`Logger`, `Static`. The `Endpoint` turns exceptions into 500s (with details when `debug`).
 
 ### Templates (EAL: Embedded Alice, `.html.eal`)
 
@@ -122,26 +149,39 @@ class RoomChannel < BunnyLive::Channel
   def join(topic : String, payload : Hash(String, Object), s : BunnyLive::Socket) : Bool
     true
   end
-  def handle_in(event : String, payload : Hash(String, Object), s : BunnyLive::Socket)
+  def handle_in(event : String, payload : Hash(String, Object), s : BunnyLive::Socket) : Object?
     broadcast(s, "new_msg", payload)
+    nil                          # or a reply payload
   end
 end
+
+sockets.channel("room:*", ->() { RoomChannel.new.as(BunnyLive::Channel) })
 ```
 
 The wire format is Phoenix's V2 JSON array, `[join_ref, ref, topic, event, payload]`, so Phoenix
-JavaScript clients can talk to Bunny.
+JavaScript clients can talk to Bunny. `PubSub.broadcast` encodes the payload once and shares the string
+across every socket. Above 64 subscribers it forks with Alice `spawn` and joins the halves (fork/join).
+`Presence` tracks keys per topic and broadcasts `presence_diff`.
 
 ### LiveView
 
 ```alice
 class CounterLive < BunnyLive::LiveView
-  def mount(s : BunnyLive::LiveSocket)
+  def template : String
+    "live/counter"
+  end
+  def mount(params : Hash(String, Object), s : BunnyLive::LiveState) : Nil
     s.assign("count", 0)
   end
-  def handle_event(event : String, params : Hash(String, Object), s : BunnyLive::LiveSocket)
-    s.assign("count", s.get_i("count") + 1) if event == "inc"
+  def handle_event(event : String, params : Hash(String, Object), s : BunnyLive::LiveState) : Nil
+    s.assign("count", s.get("count").as(Int32) + 1) if event == "inc"
+  end
+  def handle_info(event : String, payload : Object, s : BunnyLive::LiveState) : Nil
   end
 end
+
+BunnyLive::Live.register("counter", ->() { CounterLive.new.as(BunnyLive::LiveView) })
+r.get("/counter", ->(c : Bunny::Conn) { BunnyLive::Live.render(c, "counter") })
 ```
 
 ```erb
@@ -150,24 +190,36 @@ end
 <p><%= count %></p><button bunny-click="inc">+</button>
 ```
 
-The first request renders full HTML. The browser then joins over WebSocket (`/bunny.js`, with no build
-step). Events go up and diffs come back.
+The first request renders full HTML inside the layout. `/bunny.js` (no build step) then joins
+`lv:counter:<id>`. The join reply carries the statics once and the dynamics. Each event
+(`bunny-click`, `bunny-submit`, `bunny-change`, `bunny-value-*`) gets back only the slots that changed, e.g.
+`{"diff":{"0":"1"}}`. The slot comparison is a `pure def` loop that Alice parallelizes for large views.
+`s.subscribe(topic)` routes PubSub messages to `handle_info`, which pushes a diff.
 
 ### Data
 
 `Bunny::Repo` stores records through an adapter (in-memory included). `Bunny::Changeset` casts and
-validates params before anything is written (`validate_required`, `validate_length`, `validate_format`).
+validates params before anything is written (`validate_required`, `validate_length`, `validate_format`,
+`validate_number`). `BunnyApi::Render.changeset_errors` turns failures into `422 {"errors":{...}}`.
 
-## Build from source
+## Performance
 
-Requirements: [Alice](https://alice-lang.org/) 0.12+ and the .NET 10 SDK.
+Measured with `wrk -t4 -c64 -d5s` on the generated app (debug build, logger on, one machine):
+
+| Route | Requests/s |
+|---|---|
+| `GET /api/health` (text) | ~184,000 |
+| `GET /` (layout + EAL page) | ~177,000 |
+
+## Develop
 
 ```bash
-git clone https://github.com/kleeedolinux/bunnyframework
-cd bunnyframework
-for p in packages/*; do (cd $p && alice test); done   # all tests
-cd packages/controller && alice build --release       # the bunny CLI
+scripts/test.sh     # every package suite, architecture check, example app tests
 ```
+
+Alice notes that shape the code (see `archicture/README.md`): one root module per package; classes
+that apps subclass are `abstract`; overridable hooks are abstract, because Alice only emits virtual
+methods for abstract or locally overridden ones.
 
 ## Project layout
 
@@ -176,6 +228,7 @@ alice.toml            workspace
 packages/*            the six packages (see above)
 examples/hello        example app: the composition root wiring every package
 archicture/           architecture map, ADRs, module notes
+scripts/              install.sh, test.sh
 CHANGELOG.md
 ```
 

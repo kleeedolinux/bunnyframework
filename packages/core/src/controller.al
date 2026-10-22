@@ -1,6 +1,6 @@
 # Controller: render compiled views (with an optional layout) into the Conn.
 module Bunny
-  class Controller
+  abstract class Controller
     LAYOUT_KEY = "__layout"
 
     def self.put_layout(c : Conn, name : String) : Conn
@@ -8,15 +8,16 @@ module Bunny
     end
 
     def render(c : Conn, template : String) : Conn
-      body = Views.fetch(template).render(c.assigns)
-      if c.assigns.has_key?(LAYOUT_KEY)
-        layout = c.assigns[LAYOUT_KEY].to_s
-        if layout.size > 0
-          c.assign("inner_content", body)
-          body = Views.fetch(layout).render(c.assigns)
-        end
-      end
-      c.html(body)
+      c.html(Controller.wrap_layout(c, Views.fetch(template).render(c.assigns)))
+    end
+
+    # Renders the layout set by put_layout around body (as inner_content), or returns body.
+    def self.wrap_layout(c : Conn, body : String) : String
+      return body unless c.assigns.has_key?(LAYOUT_KEY)
+      layout = c.assigns[LAYOUT_KEY].to_s
+      return body if layout.size == 0
+      c.assign("inner_content", body)
+      Views.fetch(layout).render(c.assigns)
     end
 
     def render(c : Conn, template : String, status : Int32) : Conn

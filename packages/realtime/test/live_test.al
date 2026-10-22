@@ -34,6 +34,9 @@ class CounterLive < BunnyLive::LiveView
   def handle_event(event : String, params : Hash(String, Object), s : BunnyLive::LiveState) : Nil
     s.assign("count", s.get("count").as(Int32) + 1) if event == "inc"
   end
+
+  def handle_info(event : String, payload : Object, s : BunnyLive::LiveState) : Nil
+  end
 end
 
 def live_setup : BunnyLive::SocketHandler
@@ -77,4 +80,28 @@ def test_bunny_js_asset
   assert c.halted, "served"
   assert_equal "application/javascript", c.resp_headers["content-type"]
   assert c.resp_body.Contains("phx_join"), "client speaks phoenix protocol"
+end
+
+class LiveLayoutView < Bunny::View
+  def initialize
+    super("layouts/live_test", ["<html>", "</html>"])
+  end
+
+  def write(a : Hash(String, Object), out : Bunny::EalOut) : Nil
+    inner = Bunny::View.fetch(a, "inner_content", "layouts/live_test").as(String)
+    out.static(0)
+    out.open_dyn
+    out.raw(inner)
+    out.close_dyn
+    out.static(1)
+  end
+end
+
+def test_http_render_uses_layout
+  live_setup
+  Bunny::Views.register(LiveLayoutView.new)
+  c = Bunny::Controller.put_layout(Bunny::Conn.new("GET", "/counter"), "layouts/live_test")
+  c = BunnyLive::Live.render(c, "counter")
+  assert c.resp_body.StartsWith("<html><div id=\"lv-"), c.resp_body
+  assert c.resp_body.EndsWith("</script></html>"), c.resp_body
 end

@@ -1,0 +1,8 @@
+<%@ posts : List(Bunny::Record) %>
+<h1>Posts</h1>
+<a href="/posts/new">New post</a>
+<ul>
+<% for r in posts %>
+  <li><a href="/posts/<%= r.id %>"><%= r["title"] %></a></li>
+<% end %>
+</ul>

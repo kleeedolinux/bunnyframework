@@ -10,9 +10,9 @@ end
 
 def post_changeset(p : Hash(String, String)) : Bunny::Changeset
   Bunny::Changeset.cast(p, ["title", "body"])
-    .validate_required(["title"])
-    .validate_length("title", 3, 20)
-    .validate_format("body", "@")
+  .validate_required(["title"])
+  .validate_length("title", 3, 20)
+  .validate_format("body", "@")
 end
 
 def test_cast_drops_unpermitted

@@ -1,0 +1,4 @@
+<%@ message : String %>
+<h1>Welcome to Bunny</h1>
+<p><%= message %></p>
+<p><a href="/counter">Try the live counter</a></p>

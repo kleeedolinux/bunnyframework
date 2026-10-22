@@ -1,0 +1,3 @@
+<%@ message : String %>
+<p><%= message %></p>
+<button bunny-click="ping">ping</button>

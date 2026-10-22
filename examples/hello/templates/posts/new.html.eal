@@ -1,0 +1,9 @@
+<%@ errors : String %>
+<h1>New post</h1>
+<% if errors.size > 0 %><p class="error"><%= errors %></p><% end %>
+<form method="post" action="/posts">
+  <label>title <input name="title"></label>
+  <label>body <textarea name="body"></textarea></label>
+  <label>views <input name="views" type="number"></label>
+  <button>Save</button>
+</form>

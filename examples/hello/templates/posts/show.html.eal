@@ -1,0 +1,6 @@
+<%@ post : Bunny::Record %>
+<h1>Post <%= post.id %></h1>
+<p><b>title:</b> <%= post["title"] %></p>
+<p><b>body:</b> <%= post["body"] %></p>
+<p><b>views:</b> <%= post["views"] %></p>
+<a href="/posts">Back</a>

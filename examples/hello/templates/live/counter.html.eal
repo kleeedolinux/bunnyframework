@@ -1,0 +1,4 @@
+<%@ count : Int32 %>
+<h2>Count: <%= count %></h2>
+<button bunny-click="dec">-</button>
+<button bunny-click="inc">+</button>

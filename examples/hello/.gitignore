@@ -1,0 +1,4 @@
+bin/
+obj/
+.alice/
+src/_eal/
